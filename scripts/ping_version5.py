@@ -12,16 +12,20 @@ import socket
 import time
 import select
 import signal
-import copy
 from multiprocessing import Process
 import redis
-import threading
+
 
 NORMAL = 0
 ERROR = 1
 TIMEOUT = 1
 
 PINGER = 'pinger'
+REDIS_HOST = '127.0.0.1'
+REDIS_PORT = '6379'
+REDIS_DB = 0
+REDIS_PASSWORD = ''
+TEST_IP = '54.223.35.72'
 
 
 class Pinger(object):
@@ -52,7 +56,11 @@ class Pinger(object):
 
 
 	def OnConnectDone(self):
-		self.__m_endtime = time.time()		
+		self.__m_endtime = time.time()
+		self.__m_socket.close()
+
+	def endWork(self):
+		self.__m_socket.close()
 
 	def getRuntime(self):
 		if self.__m_endtime != 0:
@@ -69,8 +77,7 @@ class Pinger(object):
 		return ''.join(xml_list)
 
 
-
-def my_parse_config(filepath):
+def parse_config(filepath):
 	tree = ET.ElementTree(file = filepath)
 	root = tree.getroot()
 	reqlist = [] 									#declare a dict
@@ -82,6 +89,15 @@ def my_parse_config(filepath):
 	reqset = set(reqlist)
 	return reqset
 
+def getLocalIp():
+	import socket
+	s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+	s.connect((TEST_IP,80))
+	local_ip = s.getsockname()[0]
+	s.close()
+	return local_ip
+
+
 def getXml():
 	xml_list = []
 	xml_list.append(r'<?xml version="1.0" encoding="utf-8"?>')
@@ -92,14 +108,18 @@ def getXml():
 	return "".join(xml_list)
 
 def die(signum, frame):
-	print 'die!'
-	r = redis.Redis(host='127.0.0.1', port=6379, db=0)
+	try:
+		r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB)
+	except:
+		print 'redis error'
+		sys.exit(0)
 	xml_value = getXml()
 	print xml_value
 	try:
-		r['ip'] = xml_value
+		r[local_ip] = xml_value
 	except:
-		print 'redis error!'
+		print 'redis error!'	
+	print 'die!'
 	sys.exit(0)
 
 
@@ -110,7 +130,7 @@ def consumer():
 		cs_list = yield cs_list
 		if len(cs_list) > 0:
 			try:
-				readlist , writlist , exceptlist = select.select([], cs_list, cs_list)
+				readlist , writlist , exceptlist = select.select([], cs_list, cs_list, 5)
 				for wcs in writlist:
 					pinger_list[wcs].OnConnectDone()
 					cs_list.remove(wcs)
@@ -119,6 +139,8 @@ def consumer():
 			except:
 				print 'exit!'
 				sys.exit(0)
+
+
 
 
 def produce(c, pinger_list):
@@ -135,8 +157,10 @@ def produce(c, pinger_list):
 				cs_list = c.send(cs_list)
 		except:
 			continue
-	while len(cs_list) > 0:
+	while(len(cs_list) > 0):
 		cs_list = c.send(cs_list)
+
+	print 'end!'
 
 
 def ping():
@@ -148,33 +172,32 @@ def ping():
 
 global global_dict
 global_dict = {}
+global local_ip
+local_ip = getLocalIp()
 
 
 if __name__ == '__main__':
 	signal.signal(signal.SIGALRM, die)
 	path = sys.path[0]
 	filepath = "%s/%s" % (path, 'yybtb_utf-8.xml')
-	ip_port_set = my_parse_config(filepath)
+	ip_port_set = parse_config(filepath)
 
-	cs_list = []
-	pinger_list = {}
-	for key in ip_port_set:
-		ip = key[0]
-		port = key[1]
-		pinger = Pinger(ip, port)
-		cs = pinger.makeSocket()
-		cs_list.append(cs)
-		pinger_list[cs] = pinger
 
-	global_dict[PINGER] = pinger_list
+
 	while(1):
+		pinger_list = {}
+		for key in ip_port_set:
+			ip = key[0]
+			port = key[1]
+			pinger = Pinger(ip, port)
+			cs = pinger.makeSocket()
+			pinger_list[cs] = pinger
+		global_dict[PINGER] = pinger_list
+
 		worker = Process(target = ping)
 		worker.start()
 		worker.join()
-
-
-
-		
+		time.sleep(5)
 
 
 
