@@ -24,7 +24,9 @@ REDIS_HOST = '127.0.0.1'
 REDIS_PORT = '6379'
 REDIS_DB = 0
 REDIS_PASSWORD = ''
-TEST_IP = '54.223.35.72'
+#TEST_IP = '54.223.35.72'
+TEST_IP = 'www.sina.com.cn'
+SERVER_IP = '127.0.0.1'
 
 
 class Pinger(object):
@@ -35,7 +37,7 @@ class Pinger(object):
 		self.__m_stime = 0
 		self.__m_endtime = 0
 		self.__m_fd = -1
-		self.__m_socket = 0
+		self.__m_socket = None
 
 	def setaddress(self, ip, port):
 		self.__m_ip = ip
@@ -54,7 +56,10 @@ class Pinger(object):
 	def ping(self):
 		self.__m_stime = time.time()
 		self.__m_endtime = 0
-		self.__m_socket.connect_ex((str(self.__m_ip), int(self.__m_port)))
+		try:
+			self.__m_socket.connect_ex((str(self.__m_ip), int(self.__m_port)))
+		except:
+			print 'ping failed'
 
 	def OnConnectDone(self):
 		self.__m_endtime = time.time()
@@ -83,6 +88,7 @@ class Pinger(object):
 		self.__m_socket.close()
 		self.__m_socket = ''
 
+
 class PingerManager(object):
 	def __init__(self, configPath):
 		self.__m_localip = ''
@@ -91,7 +97,7 @@ class PingerManager(object):
 		self.__m_ip_port_set = {}
 		self.__m_pinger_list = []
 		self.__m_cs_list = []
-		self.__m_queue = Queue()
+		self.__m_socket = ''
 
 
 	def parse_config(self):
@@ -117,6 +123,7 @@ class PingerManager(object):
 	def preWork(self):
 		self.parse_config()
 		self.__m_localip = self.getLocalIp()
+		self.connect()
 		print self.__m_localip
 		for key in self.__m_ip_port_set:
 			ip = key[0]
@@ -124,6 +131,20 @@ class PingerManager(object):
 			pinger = Pinger(ip, port)
 			self.__m_pinger_list.append(pinger)
 		print 'work down'
+	
+
+
+	def connect(self):
+		self.__m_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		try:
+			status = self.__m_socket.connect_ex(('127.0.0.1', 9501))
+		except:
+			print 'server connot connect!'
+			sys.exit(0)
+
+
+	def send(self, msg):
+		self.__m_socket.send(msg)
 
 
 	def run(self):
@@ -134,7 +155,6 @@ class PingerManager(object):
 			self.__m_pinger_dict[cs] = pinger
 			self.__m_cs_list.append(cs)
 		cs_list = []
-		
 		pinger_list = self.__m_pinger_dict
 		index = 0
 		for (cs, pinger) in self.__m_pinger_dict.items():
@@ -144,22 +164,28 @@ class PingerManager(object):
 			if index % 50 == 0 and len(cs_list) > 0:
 				print len(cs_list)
 				cs_list = self.receive(cs_list)
-		cs_list = self.receive(cs_list)
-		print self.getResult()
+
+		while len(cs_list) > 0:
+			cs_list = self.receive(cs_list)
+		#print self.getResult()
+		self.send(self.getResult())
 		for (cs, pinger) in self.__m_pinger_dict.items():
-			cs.close()
+			try:
+				cs.setblocking(1)
+				cs.shutdown(socket.SHUT_RDWR)
+				cs.close()
+			except:
+				print 'error..'
 		
 
 	def receive(self, cs_list):
-		print len(cs_list)
 		try:
 			print 'try'
 			readlist , writlist , exceptlist = select.select([], cs_list, cs_list, 1)
-			print 'writlist %s' % len(writlist)
+			print len(writlist)
 			for wcs in writlist:
 				self.__m_pinger_dict[wcs].OnConnectDone()
 				cs_list.remove(wcs)
-			print 'except:%s' % len(exceptlist)
 			for ecs in exceptlist:
 				cs_list.remove(ecs)
 			if (len(writlist) == 0 and len(exceptlist) == 0):
@@ -175,10 +201,8 @@ class PingerManager(object):
 		while 1:
 			worker = Process(target=self.run())
 			worker.start()
-			time.sleep(60)
+			time.sleep(10)
 			print 'wake up'
-
-			
 
 
 	def stop(self):
@@ -186,15 +210,16 @@ class PingerManager(object):
 			pinger.stop()
 		self.__m_pinger_dict = {}
 
+
 	def getResult(self):
 		xml_list = []
 		xml_list.append(r'<?xml version="1.0" encoding="utf-8"?>')
 		xml_list.append('\n')
-		xml_list.append(r'<wlh_query_yyb>')		
+		xml_list.append(r'<massage local_ip="%s">' % self.__m_localip)		
 		xml_list.append('\n')
 		for pinger in self.__m_pinger_list:
 			xml_list.append(pinger.get_result())
-		xml_list.append(r'</wlh_query_yyb>')
+		xml_list.append(r'</massage>')
 		xml_list.append('\n')
 		return "".join(xml_list)
 
@@ -206,7 +231,4 @@ if __name__ == '__main__':
 	pManager = PingerManager(filepath)
 	pManager.preWork()
 	pManager.start()
-
-
-
 
