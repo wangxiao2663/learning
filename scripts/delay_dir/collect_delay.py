@@ -27,6 +27,10 @@ SERVER_PORT = 9501
 GROUPSIZE = 50
 
 DEFAULT_DELAYTIME = 3000
+CONFIG_FILE = 'yybtb.xml'
+
+START_HEAD = 'fdfdfdfd'
+END_TAIL = 'DONEDONEDONE'
 
 provincesArr = {
 			'11':'北京',
@@ -69,9 +73,10 @@ provincesArr = {
 
 
 ISP_Server = {
-	'CT':'电信',
-	'CMCC':'移动',
-	'CU':'联通'
+	'铁通':'CMCC',
+	'电信':'CT',
+	'移动':'CMCC',
+	'联通':'CU'
 }
 
 
@@ -87,9 +92,9 @@ def getProvinceKey(Province):
 
 
 def getIsp(isp):
-	for (key, value) in ISP_Server.items():
+	for (name, key) in ISP_Server.items():
 		try:
-			nPos = isp.index(value)
+			nPos = isp.index(name)
 			return key
 		except:
 			continue
@@ -268,13 +273,10 @@ class Pinger(object):
 
 	def get_result(self):
 		xml_list = []
-		
 		result = self.getRuntime()
 		if (result < 0):
 			result = 'time out!'
 		xml_list.append(r'<item><ip>%s</ip><port>%s</port><result>%s</result></item>' % (self.__m_ip, self.__m_port, result))
-#		xml_list.append(r'%s' % result)
-#		xml_list.append(r'</item>')
 		return ''.join(xml_list)
 
 	def stop(self):
@@ -302,8 +304,12 @@ class PingerManager(object):
 
 
 	def parse_config(self):
-		tree = ET.ElementTree(file = self.__m_config)
-		root = tree.getroot()
+		dstr = ""
+		with open(self.__m_config, 'r') as fp:
+			dstr = fp.read()
+			dstr = dstr.decode('GBK').encode('utf-8')
+			dstr = dstr.replace('GBK', 'utf-8')
+		root = ET.fromstring(dstr)
 		reqlist = [] 									#declare a dict
 		for item in root:
 			ip = item.get('mobileip')
@@ -331,9 +337,7 @@ class PingerManager(object):
 			port = key[1]
 			try:
 				address = self.__m_IPInfo.getIpAddr(string2ip(ip))
-				print address
 			except:
-				print 'continue'
 				continue 
 			'''
 				ip = getIpAddr(ip)
@@ -345,10 +349,9 @@ class PingerManager(object):
 			'''
 			addressKey = getProvinceKey(address)
 			if (address == None):
-				print address
 				continue
 			isp = getIsp(address)
-			print isp
+
 			pinger = Pinger(ip, port, addressKey, isp)
 			self.__m_pinger_list.append(pinger)
 
@@ -358,7 +361,6 @@ class PingerManager(object):
 				self.__m_calc_pinger_dict[isp][addressKey] = []
 			self.__m_calc_pinger_dict[isp][addressKey].append(pinger);
 
-		print self.__m_calc_pinger_dict;
 		print 'work down'
 	
 
@@ -366,6 +368,9 @@ class PingerManager(object):
 		self.__m_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		try:
 			status = self.__m_socket.connect_ex((SERVER_IP, SERVER_PORT))
+			if status != NORMAL:
+				return False
+			return True
 		except:
 			print 'server connot connect!'
 			sys.exit(0)
@@ -376,25 +381,28 @@ class PingerManager(object):
 		new_msg = "%s:%s" % (self.__m_localip,msg)
 		
 		try:
-			self.__m_socket.send('hellohellohello!')
+			self.__m_socket.send(START_HEAD)
 		except:
-			self.connect()
-			self.send(msg)
+			if self.connect() == True:
+				self.send(msg)
+			else:
+				return
 		time.sleep(1);
-		print 'hello done!'
 		try:
 			self.__m_socket.send(new_msg)
 		except:
-			self.connect()
-			self.send(msg)
-		print 'done!'
+			if self.connect() == True:
+				self.send(msg)
+			else:
+				return
 		time.sleep(1);
 		try:
-			self.__m_socket.send('donedonedone!')
-			print 'donedonedone!'
+			self.__m_socket.send(END_TAIL)
 		except:
-			self.connect()
-			self.send(msg)
+			if self.connect() == True:
+				self.send(msg)
+			else:
+				return
 
 
 	def run(self):
@@ -414,7 +422,6 @@ class PingerManager(object):
 			pinger.ping()
 			cs_list.append(cs)
 			if index % GROUPSIZE == 0 and len(cs_list) > 0:
-				print len(cs_list)
 				cs_list = self.receive(cs_list)
 
 		while len(cs_list) > 0:
@@ -426,9 +433,7 @@ class PingerManager(object):
 
 	def receive(self, cs_list):
 		try:
-			print 'try'
 			readlist , writlist , exceptlist = select.select([], cs_list, cs_list, 1)
-			print len(writlist)
 			for wcs in writlist:
 				self.__m_pinger_dict[wcs].OnConnectDone()
 				cs_list.remove(wcs)
@@ -436,8 +441,6 @@ class PingerManager(object):
 				cs_list.remove(ecs)
 			if (len(writlist) == 0 and len(exceptlist) == 0):
 				cs_list = []
-				print 'empty'
-			print 'select over'
 		except:
 			print 'select error!'
 		return cs_list
@@ -502,7 +505,7 @@ def getIpAddr(domain):
 
 def main():
 	path = sys.path[0]
-	filepath = "%s/%s" % (path, 'yybtb_utf-8.xml')
+	filepath = "%s/%s" % (path, CONFIG_FILE)
 	pManager = PingerManager(filepath)
 	pManager.preWork()
 	pManager.start()

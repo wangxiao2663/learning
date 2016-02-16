@@ -7,6 +7,9 @@ require_once(_DOC_ROOT."/common.php");
 define('_SERVER_IP', '192.168.200.132');
 define('_SERVER_PORT', 9501);
 
+define('_START_HEAD', 'fdfdfdfd');
+define('_END_TAIL', 'DONEDONEDONE');
+
 $recv_msg_arr = array();
 
 $redis = new Redis();
@@ -20,15 +23,14 @@ $serv->on('connect', function ($serv, $fd) {
 $serv->on('receive', function ($serv, $fd, $from_id, $data) {
     $serv->send($fd, "ok");
     global $recv_msg_arr;
-    echo "$data"."\n";
     if(strlen($data) < 20)
     {
-        if(strcmp($data, "hellohellohello!") == 0)
+        if(strcmp($data, _START_HEAD) == 0)
         {
             echo "hello.\n";
             $recv_msg_arr[$fd] = "";
         }
-        if(strcmp($data, "donedonedone!") == 0)
+        if(strcmp($data, _END_TAIL) == 0)
         {
             echo "done!\n";
             Analysis($recv_msg_arr[$fd]);
@@ -68,7 +70,6 @@ function Analysis($data)
         $hisKey = $from_ip."_".$Now;
         $redis->set($hisKey, $message);
         $redis->expire($hisKey, 3600 * 48);
-
 
     	$msg = $redis->get($from_ip);
     }
