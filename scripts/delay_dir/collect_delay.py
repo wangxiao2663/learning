@@ -22,9 +22,11 @@ TIMEOUT = 1
 
 PINGER = 'pinger'
 TEST_IP = '54.223.35.72'
-SERVER_IP = '127.0.0.1'
+SERVER_IP = '192.168.200.132'
+SERVER_PORT = 9501
 GROUPSIZE = 50
 
+DEFAULT_DELAYTIME = 3000
 
 provincesArr = {
 			'11':'北京',
@@ -266,13 +268,13 @@ class Pinger(object):
 
 	def get_result(self):
 		xml_list = []
-		xml_list.append(r'<item ip=%s port=%s provice=%s isp=%s>' % 
-			(self.__m_ip, self.__m_port, self.__m_address, self.__m_isp))
+		
 		result = self.getRuntime()
 		if (result < 0):
 			result = 'time out!'
-		xml_list.append(r'%s' % result)
-		xml_list.append(r'</item>')
+		xml_list.append(r'<item><ip>%s</ip><port>%s</port><result>%s</result></item>' % (self.__m_ip, self.__m_port, result))
+#		xml_list.append(r'%s' % result)
+#		xml_list.append(r'</item>')
 		return ''.join(xml_list)
 
 	def stop(self):
@@ -363,7 +365,7 @@ class PingerManager(object):
 	def connect(self):
 		self.__m_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		try:
-			status = self.__m_socket.connect_ex((SERVER_IP, 9501))
+			status = self.__m_socket.connect_ex((SERVER_IP, SERVER_PORT))
 		except:
 			print 'server connot connect!'
 			sys.exit(0)
@@ -374,10 +376,11 @@ class PingerManager(object):
 		new_msg = "%s:%s" % (self.__m_localip,msg)
 		
 		try:
-			self.__m_socket.send('hello')
+			self.__m_socket.send('hellohellohello!')
 		except:
 			self.connect()
 			self.send(msg)
+		time.sleep(1);
 		print 'hello done!'
 		try:
 			self.__m_socket.send(new_msg)
@@ -385,6 +388,7 @@ class PingerManager(object):
 			self.connect()
 			self.send(msg)
 		print 'done!'
+		time.sleep(1);
 		try:
 			self.__m_socket.send('donedonedone!')
 			print 'donedonedone!'
@@ -454,30 +458,38 @@ class PingerManager(object):
 
 	def getResult(self):
 		xml_list = []
-		xml_list.append(r'<?xml version="1.0" encoding="utf-8"?>')
-		time_now = time.strftime("%Y-%m-%d %H:%M:%S",time.localtime())
+		xml_list.append(r'<?xml version="1.0" encoding="gb2312" ?>')
+		xml_list.append(r'<root>')
+		time_now = time.strftime("%Y-%m-%d-%H-%M-%S",time.localtime())
 		xml_list.append(r'<time>%s</time>' % time_now)
 		xml_list.append(r'<local_ip>%s</local_ip>' % (self.__m_localip))
-
+		xml_list.append(r'<delayMessage>')
 		for (isp, provice_dict) in self.__m_calc_pinger_dict.items():
-			xml_list.append(r'<ISP name=%s>' % isp)
+			xml_list.append(r'<%s>' % isp)
 			for (provice, pinger_list) in provice_dict.items():
 				msg_list = []
 				nCount = len(pinger_list)
 				if (nCount <= 0):
 					continue
-				timeout = 0.00;
+				delayTime = 0.000;
 				for pinger in pinger_list:
 					runtime = pinger.getRuntime()
 					if (runtime < 0):
-						timeout = timeout + 1
+						delayTime = delayTime + DEFAULT_DELAYTIME
+					else:
+						delayTime = delayTime + float(runtime)
 					msg_list.append(pinger.get_result())
 
-				fPer = timeout / nCount * 100
-
-				xml_list.append(r'<delayMessage provice=%s OvertimeRate = %.3f>%s</provice>' % (provice, fPer, "".join(msg_list)))
+				fAvgDelayTime = delayTime / nCount
+				xml_list.append(r'<Row>')
+				xml_list.append(r'<provice>%s</provice>' % provice)
+				xml_list.append(r'<OvertimeRate>%.3f</OvertimeRate>' % fAvgDelayTime)
+				xml_list.append(r'<detailMsg>%s</detailMsg>' % "".join(msg_list))
+				xml_list.append(r'</Row>')
+				#xml_list.append(r'<detailRow provice=%s OvertimeRate = %.3f>%s</provice>' % (provice, fPer, "".join(msg_list)))
 			xml_list.append(r'</%s>' % isp)
-	
+		xml_list.append(r'</delayMessage>')
+		xml_list.append(r'</root>')
 		return "".join(xml_list)
 
 

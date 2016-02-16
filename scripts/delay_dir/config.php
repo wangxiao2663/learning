@@ -87,16 +87,10 @@ $master = array(
       '54.223.33.218'=>'BGP亚马逊',//76
 
       '192.168.200.132'=>'测试服务器',
+      '192.168.200.32'=>'测试服务器',
      
     );
 
-//$master中电信\移动\联通\vip地址的位置,如果改了master要改这个数组
-$ipPosition = array(
-                  1 => array('start' => 0, 'end' => 25),
-                  5 => array('start' =>26, 'end' => 51),
-                  6 => array('start' =>52, 'end' => 60),
-                   -1 => array('start' =>61, 'end' => 77),
-);
 
 $provincesArr = array(
             11 => "北京",

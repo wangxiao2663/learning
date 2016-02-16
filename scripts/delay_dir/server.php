@@ -4,12 +4,15 @@ define("_DOC_ROOT", dirname(__FILE__));
 require_once(_DOC_ROOT."/config.php");
 require_once(_DOC_ROOT."/common.php");
 
+define('_SERVER_IP', '192.168.200.132');
+define('_SERVER_PORT', 9501);
+
 $recv_msg_arr = array();
 
 $redis = new Redis();
 connect($redis);
 
-$serv = new swoole_server("127.0.0.1", 9501); 
+$serv = new swoole_server(_SERVER_IP, _SERVER_PORT); 
 $serv->on('connect', function ($serv, $fd) {  
     echo "Client: Connect.\n";
 });
@@ -17,23 +20,26 @@ $serv->on('connect', function ($serv, $fd) {
 $serv->on('receive', function ($serv, $fd, $from_id, $data) {
     $serv->send($fd, "ok");
     global $recv_msg_arr;
-    print 'recv len = '.strlen($data)."\n";
+    echo "$data"."\n";
     if(strlen($data) < 20)
     {
-      if(strcmp($data, "hello") == 0)
-      {
-        print 'hello\n';
-        $recv_msg_arr[$fd] = "";
-      }
-      if(strcmp($data, "donedonedone!") == 0)
-      {
-        print 'donedonedone\n';
-        Analysis($data);
-      }
+        if(strcmp($data, "hellohellohello!") == 0)
+        {
+            echo "hello.\n";
+            $recv_msg_arr[$fd] = "";
+        }
+        if(strcmp($data, "donedonedone!") == 0)
+        {
+            echo "done!\n";
+            Analysis($recv_msg_arr[$fd]);
+        }
     }
     else
     {
-      $recv_msg_arr[$fd] = $recv_msg_arr[$fd].$data;
+        if (array_key_exists($fd, $recv_msg_arr) == true)
+        {
+            $recv_msg_arr[$fd] = $recv_msg_arr[$fd].$data;
+        }
     }
     
 });
@@ -52,24 +58,24 @@ function Analysis($data)
 	global $redis;
 	try 
 	{
-
-		  $from_ip = strchr($data,":",true);
+		$from_ip = strchr($data,":",true);
     	$message = substr($data, strlen($from_ip) + 1);
-    	$Now = date("Y-m-d_H:i");
-    	$redis->set($from_ip, $message);
+        stripslashes($message);
+    	$Now = date("YmdH");
 
-      echo "\n";
-      echo "msg:".strlen($message)."\n";
+        $redis->set($from_ip, $message);
+
+        $hisKey = $from_ip."_".$Now;
+        $redis->set($hisKey, $message);
+        $redis->expire($hisKey, 3600 * 48);
+
 
     	$msg = $redis->get($from_ip);
-      echo "\n";
-    	print("get:".strlen($msg)."\n");
-    	
     }
-   	catch (Exception $e)
-   	{
+    catch (Exception $e)
+    {
    		echo "error!";
-   	}
+    }
 }
 
 
