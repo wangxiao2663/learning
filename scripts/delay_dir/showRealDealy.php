@@ -12,7 +12,7 @@ $redis = new Redis();
 connect($redis);
 
 $nTime = _POST["time"];
-$nTime = 2016021615;
+$nTime = 2016030216;
 
 
 foreach ($master as $ip => $jf) 
@@ -63,50 +63,64 @@ foreach ($jf_arr as $jf => $arr)
 
 }
 
-print_r($result_arr);
+//print_r($result_arr);
 
-/*
-foreach ($jf_arr as $jf => $arr) 
+
+$avg_arr = array();
+
+foreach ($result_arr as $jf => $ip_arr) 
 {
-	$count_arr = array();
-	$count = count($arr);
-	foreach ($arr as $index => $ip) 
+	$ip_count = 0;
+	$avg_arr[$jf] = array();
+	foreach ($ip_arr as $ip => $isp_arr) 
 	{
-		print ("ip:".$ip."\n");
-		$detail_arr = $ip_msg[$ip];
-		print("detail:\n");
-		print_r($detail_arr);
-		foreach ($detail_arr as $isp => $provice_arr) 
+		if (empty($isp_arr))
 		{
-			if (array_key_exists($isp, $count_arr) == false)
+			continue;
+		}
+		else
+		{
+			$ip_count++;
+		}
+		foreach ($isp_arr as $isp => $provice_arr) 
+		{
+			$avg_arr[$jf][$isp] = array();
+			foreach ($provice_arr as $provice => $value) 
 			{
-				$count_arr[$isp] = array();
-			}
-			foreach ($provice_arr as $provice => $OvertimeRate) 
-			{
-				if (array_key_exists($provice, $count_arr[$isp]) == false)
+				if (array_key_exists($provice, $avg_arr[$jf][$isp]))
 				{
-					$count_arr[$isp][$provice] = 0.00;
+					$avg_arr[$jf][$isp][$provice] += $value;
 				}
-				$count_arr[$isp][$provice] += $OvertimeRate;
+				else
+				{
+					$avg_arr[$jf][$isp][$provice] = $value;
+				}
 			}
 		}
 	}
 
-	foreach ($count_arr as $isp => $provice_arr) {
-		# code...
-		foreach ($provice_arr as $provice => $OvertimeRate) {
-			# code...
-			$count_arr[$isp][$provice] = $count_arr[$isp][$provice] / $count;
-		}
+	if ($ip_count == 0)
+	{
+		continue;
 	}
 
-	$result_arr[$jf] = $count_arr;
-
+	foreach ($avg_arr as $jf => $isp_arr) 
+	{
+		# code...
+		foreach ($isp_arr as $isp => $provice_arr) 
+		{
+			# code...
+			foreach ($provice_arr as $provice => $value) 
+			{
+				# code...
+				$avg_arr[$jf][$isp][$provice] = $value / $ip_count;
+			}
+		}
+	}
 }
 
-print_r($result_arr);
-*/
+print_r($avg_arr);
+
 
 function Analysis($xmlMsg)
 {
@@ -123,6 +137,8 @@ function Analysis($xmlMsg)
 	}
 	return $arr;
 }
+
+
 
 
 
