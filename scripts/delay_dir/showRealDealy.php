@@ -12,11 +12,23 @@ $redis = new Redis();
 connect($redis);
 
 $nTime = _POST["time"];
-$nTime = 2016030216;
+$nTime = 2016030712;
+$g_site_arr = _Post["sites"];
+$g_site_arr = array("测试服务器","石桥移动");
+
+if (is_array($g_site_arr) == 0)
+{
+	print "0";
+	exit();
+}
 
 
 foreach ($master as $ip => $jf) 
 {
+	if (in_array($jf, $g_site_arr) == false)
+	{
+		continue;
+	}
 	if ($nTime == 0)
 	{
 		$key = $ip;
@@ -119,6 +131,7 @@ foreach ($result_arr as $jf => $ip_arr)
 	}
 }
 
+//print_r($avg_arr[$g_site]);
 print_r($avg_arr);
 
 
