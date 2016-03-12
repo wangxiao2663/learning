@@ -98,6 +98,7 @@ def getIsp(isp):
 			return key
 		except:
 			continue
+	print isp
 	return 'Other'
 
 
@@ -215,6 +216,25 @@ class IpLocater :
         return unicode(address,'gb2312').encode('utf-8')
 
 
+class QsInfo(object):
+	def __init__(self, qsid, wtid, yybname, area, qsname, ip, port):
+		self.__m_qsid = qsid
+		self.__m_wtid = wtid
+		self.__m_yybname = yybname
+		self.__m_area = area
+		self.__m_qsname = qsname
+		self.__m_ip = ip
+		self.__m_port = port
+
+	def getIpPort(self):
+		return (self.__m_ip, self.__m_port)
+
+	def getInfo(self):
+		xml_list = []
+		xml_list.append(r'<QsInfo><qsid>%s</qsid><wtid>%s</wtid><yybname>%s</yybname><area>%s</area><qsname>%s</qsname></QsInfo>' 
+						% (self.__m_qsid, self.__m_wtid, self.__m_yybname, self.__m_area, self.__m_qsname))
+		return ''.join(xml_list)	
+
 
 
 class Pinger(object):
@@ -228,6 +248,8 @@ class Pinger(object):
 		self.__m_endtime = 0
 		self.__m_fd = -1
 		self.__m_socket = None
+		self.__m_qsList = []
+
 
 	def setaddress(self, ip, port):
 		self.__m_ip = ip
@@ -270,13 +292,22 @@ class Pinger(object):
 		else:
 			return -1
 
+	def addQsInfo(self, qsInfo):
+		self.__m_qsList.append(qsInfo)
+
 
 	def get_result(self):
 		xml_list = []
 		result = self.getRuntime()
 		if (result < 0):
 			result = 'time out!'
-		xml_list.append(r'<item><ip>%s</ip><port>%s</port><result>%s</result></item>' % (self.__m_ip, self.__m_port, result))
+		xml_list.append(r'<item>')
+		xml_list.append(r'<ip>%s</ip><port>%s</port><result>%s</result>' % (self.__m_ip, self.__m_port, result))
+		xml_list.append(r'<QsList>')
+		for qsInfo in self.__m_qsList:
+			xml_list.append(qsInfo.getInfo()) 
+		xml_list.append(r'</QsList>')
+		xml_list.append(r'</item>')
 		return ''.join(xml_list)
 
 	def stop(self):
@@ -300,7 +331,9 @@ class PingerManager(object):
 		self.__m_pinger_list = []
 		self.__m_cs_list = []
 		self.__m_calc_pinger_dict = {}
+		self.__m_ip_port_pinger_dict = {}
 		self.__m_socket = ''
+		self.__m_qsList = []
 
 
 	def parse_config(self):
@@ -310,12 +343,21 @@ class PingerManager(object):
 			dstr = dstr.decode('GBK').encode('utf-8')
 			dstr = dstr.replace('GBK', 'utf-8')
 		root = ET.fromstring(dstr)
-		reqlist = [] 									#declare a dict
+		reqlist = [] 		
+
 		for item in root:
 			ip = item.get('mobileip')
 			port = item.get('portlist')
 			port = (port.split('|'))[0].split(',')[1]	#get port
 			reqlist.append((ip,port))
+			qsid = item.get('qsid')
+			wtid = item.get('wtid')
+			yybname = item.get('yybname')
+			area = item.get('area')
+			qsname = item.get('qsname')
+			qsInfo = QsInfo(qsid, wtid, yybname, area, qsname, ip, port)
+			self.__m_qsList.append(qsInfo)
+
 		self.__m_ip_port_set = set(reqlist)
 
 
@@ -326,6 +368,15 @@ class PingerManager(object):
 		s.close()
 		return local_ip
 
+	def addPingerData(self):
+		root = ET.fromstring(self.__m_dstr)
+		reqlist = [] 									#declare a dict
+		for item in root:
+			ip = item.get('mobileip')
+			port = item.get('portlist')
+			port = (port.split('|'))[0].split(',')[1]	#get port
+			
+		
 
 	def preWork(self):
 		self.parse_config()
@@ -339,14 +390,6 @@ class PingerManager(object):
 				address = self.__m_IPInfo.getIpAddr(string2ip(ip))
 			except:
 				continue 
-			'''
-				ip = getIpAddr(ip)
-				try:
-					(province, company) = self.__m_IPInfo.getIPAddr(ip)
-					print province
-				except:
-					continue
-			'''
 			addressKey = getProvinceKey(address)
 			if (address == None):
 				continue
@@ -354,12 +397,21 @@ class PingerManager(object):
 
 			pinger = Pinger(ip, port, addressKey, isp)
 			self.__m_pinger_list.append(pinger)
+			self.__m_ip_port_pinger_dict[(ip,port)] = pinger
 
 			if self.__m_calc_pinger_dict.has_key(isp) == False:
 				self.__m_calc_pinger_dict[isp] = dict()
 			if self.__m_calc_pinger_dict[isp].has_key(addressKey) == False:
 				self.__m_calc_pinger_dict[isp][addressKey] = []
 			self.__m_calc_pinger_dict[isp][addressKey].append(pinger);
+
+		for qsInfo in self.__m_qsList:
+			key = qsInfo.getIpPort()
+			try:
+				pinger = self.__m_ip_port_pinger_dict[key]
+				pinger.addQsInfo(qsInfo)
+			except:
+				continue
 
 		print 'work down'
 	
@@ -377,10 +429,10 @@ class PingerManager(object):
 
 
 	def send(self, msg):
-
 		new_msg = "%s:%s" % (self.__m_localip,msg)
-		
+		new_msg = new_msg.encode('GBK')
 		try:
+			print 'send hello'
 			self.__m_socket.send(START_HEAD)
 		except:
 			if self.connect() == True:
@@ -389,14 +441,17 @@ class PingerManager(object):
 				return
 		time.sleep(1);
 		try:
+			print 'send message'
 			self.__m_socket.send(new_msg)
 		except:
 			if self.connect() == True:
 				self.send(msg)
 			else:
 				return
+
 		time.sleep(1);
 		try:
+			print 'send tail'
 			self.__m_socket.send(END_TAIL)
 		except:
 			if self.connect() == True:
@@ -461,7 +516,7 @@ class PingerManager(object):
 
 	def getResult(self):
 		xml_list = []
-		xml_list.append(r'<?xml version="1.0" encoding="gb2312" ?>')
+		xml_list.append(r'<?xml version="1.0" encoding="GBK"?>')
 		xml_list.append(r'<root>')
 		time_now = time.strftime("%Y-%m-%d-%H-%M-%S",time.localtime())
 		xml_list.append(r'<time>%s</time>' % time_now)
