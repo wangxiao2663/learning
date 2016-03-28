@@ -2,10 +2,10 @@
 
 define ('REDIS_IP','127.0.0.1');
 define ('REDIS_PORT', 6379);
-define ('PASSPORT', 'panyongzhi');
+define ('PASSPORT', 'sjcg@hexin');
 define ('DB',0);
 
-function connect(Redis $redis)
+function connect(Redis &$redis)
 {
 	try
 	{
