@@ -6,20 +6,17 @@ define("_DOC_ROOT", dirname(__FILE__));
 require_once(_DOC_ROOT."/config.php");
 require_once(_DOC_ROOT."/common.php");
 
-define('_SERVER_IP', '172.31.60.33');
-define('_SERVER_PORT', 9888);
+define('_SERVER_IP', '192.168.200.132');
+define('_SERVER_PORT', 9501);
 
 define('_START_HEAD', 'fdfdfdfd');
 define('_END_TAIL', 'DONEDONEDONE');
 
 $recv_msg_arr = array();
 
-$redis = new Redis();
-connect($redis);
-
 $serv = new swoole_server(_SERVER_IP, _SERVER_PORT); 
 $serv->on('connect', function ($serv, $fd) {  
-    #echo "Connect : ".$fd."\n";
+    echo "Connect : ".$fd."\n";
     $recv_msg_arr[$fd] = "";
 });
 
@@ -61,7 +58,9 @@ $serv->start();
 
 function Analysis($data)
 {
-	global $redis;
+
+    $redis = new Redis();
+    connect($redis);
 	$from_ip = "";
 	$message = "";
 
@@ -84,29 +83,28 @@ function Analysis($data)
 	
     try
     {
-    	$Now = date("YmdH");
-        $retCode = $redis->set($from_ip, $message);
-        if ($retCode != 1)
+        do
         {
-        	print('1.set error, retcode = '.$retCode."\n");
-        	#resetRedis();
-        	return;
+    	   $Now = date("YmdH");
+            $retCode = $redis->set($from_ip, $message);
+            if ($retCode != true)
+            {
+            	break;
+            }
+            $hisKey = $from_ip."_".$Now;
+            $retCode = $redis->set($hisKey, $message);
+            if ($retCode != true)
+            {
+            	break;
+            }
+            $retCode = $redis->expire($hisKey, 3600 * 48);
+            if ($retCode != true)
+            {
+            	break;
+            }
         }
-        $hisKey = $from_ip."_".$Now;
-        $retCode = $redis->set($hisKey, $message);
-        if ($retCode != 1)
-        {
-        	print('2.set error, retcode = '.$retCode."\n");
-        	#resetRedis();
-        	return;
-        }
-        $retCode = $redis->expire($hisKey, 3600 * 48);
-        if ($retCode != 1)
-        {
-        	print('3.expire error, retcode = '.$retCode."\n");
-        	#resetRedis();
-        	return;
-        }
+        while(0);
+        unset($redis);
     }
     catch (Exception $e)
     {
@@ -115,19 +113,9 @@ function Analysis($data)
             $recv_msg_arr[$key] = "";
         }
         echo "error!";
-		resetRedis();
+		unset($redis);
     }
 }
 
-
-function resetRedis()
-{
-	global $redis;
-	$redis->close();
-	unset($GLOBALS['redis']);
-	global $redis;
-	$redis = new Redis();
-	connect($redis);
-}
 
 ?>
