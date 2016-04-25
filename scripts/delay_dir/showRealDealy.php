@@ -96,7 +96,10 @@ foreach ($result_arr as $jf => $ip_arr)
 		}
 		foreach ($isp_arr as $isp => $provice_arr) 
 		{
-			$avg_arr[$jf][$isp] = array();
+			if (!array_key_exists($isp, $avg_arr[$jf]))
+			{
+				$avg_arr[$jf][$isp] = array();
+			}
 			foreach ($provice_arr as $provice => $value) 
 			{
 				if (array_key_exists($provice, $avg_arr[$jf][$isp]))
