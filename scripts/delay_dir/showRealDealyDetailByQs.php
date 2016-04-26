@@ -12,7 +12,6 @@ connect($redis);
 
 $nTime = _POST["time"];
 $nQsid = _POST["qsid"];
-
 $g_nqsid = $nQsid;
 
 
@@ -40,6 +39,7 @@ foreach ($master as $ip => $jf)
 	}
 }
 
+print_r($g_arrData);
 
 function analysis($xmlMsg)
 {
@@ -49,10 +49,6 @@ function analysis($xmlMsg)
 	$delayMessage = $xmlMsg->delayMessage;
 	foreach ($delayMessage->children() as $isp => $SummaryMsg) 
 	{
-		if (!array_key_exists($isp, $arr))
-		{
-			$arr[$isp] = array();
-		}
 		foreach ($SummaryMsg->children() as $item => $value) 
 		{
 			$detailMsg = $value->detailMsg;
@@ -88,7 +84,7 @@ function analysis($xmlMsg)
 					$detail_arr["qsid"] = $qsinfo["qsid"];
 					$detail_arr["yybname"] = $qsinfo["yybname"];
 					$detail_arr["qsname"] = $qsinfo["qsname"];
-					$arr[$isp][$nIndex] = $detail_arr;
+					$arr[$nIndex] = $detail_arr;
 					$nIndex++;
 				}
 
