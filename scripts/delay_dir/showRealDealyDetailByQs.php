@@ -10,8 +10,8 @@ $ip_msg = array();
 $redis = new Redis();
 connect($redis);
 
-$nTime = _POST["time"];
-$nQsid = _POST["qsid"];
+$nTime = $_POST["time"];
+$nQsid = $_POST["qsid"];
 $g_nqsid = $nQsid;
 
 
@@ -35,12 +35,16 @@ foreach ($master as $ip => $jf)
 	if ($msg != NULL)
 	{
 		$xmlMsg = simplexml_load_string($msg);
-		$g_arrData[$jf][$ip] = analysis($xmlMsg);
+		$ip_arr = analysis($xmlMsg);
+		if (sizeof($ip_arr) > 0)
+		{
+			$g_arrData[$jf][$ip] = $ip_arr;
+		}
 	}
 }
 
-print_r($g_arrData);
-
+//print_r($g_arrData);
+print_r('('.json_encode($g_arrData).')');
 function analysis($xmlMsg)
 {
 	global $g_nqsid;
@@ -48,11 +52,11 @@ function analysis($xmlMsg)
 	$arr = array();
 	$delayMessage = $xmlMsg->delayMessage;
 	foreach ($delayMessage->children() as $isp => $SummaryMsg) 
-	{
+	{			
+		$nIndex = 0;
 		foreach ($SummaryMsg->children() as $item => $value) 
 		{
 			$detailMsg = $value->detailMsg;
-			$nIndex = 0;
 			foreach ($detailMsg->children() as $item2 => $detail) 
 			{
 				# code...
